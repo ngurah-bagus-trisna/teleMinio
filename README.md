@@ -1,21 +1,23 @@
-# Telegram → MinIO Photo Uploader & Random Picker Service
+# Telegram → MinIO Photo Uploader & AI‑Powered Random Picker Service
 
 This Python service does two things:
 
 1. **Telegram Bot**: Receives photos via Telegram, uploads them to a configured MinIO bucket, and replies with a presigned URL.
-2. **HTTP API** (`/random`): Exposes a simple REST endpoint that returns a random, unused photo URL (and marks it as used).
-
-You can integrate the `/random` endpoint with Obsidian Templater to embed a new photo in your daily note.
+2. **HTTP API** (`/random`): Exposes a REST endpoint that returns a random, unused photo URL and AI‑generated caption, marking it as used.
+3. **Reset Command** (`/reset`): Clears the used record so photos can be reused.
 
 ---
 
 ## Features
 
-* Secure uploads from a single authorized Telegram chat
-* Stores photos in MinIO (S3‑compatible) with presigned URLs
-* Tracks used photos in `used.txt`, ensuring no repeats
-* Background Flask server on port `8000` for random photo retrieval
-* Detailed logging for easy debugging
+* Secure uploads from a single authorized Telegram chat (cropped to 3:2).
+* Presigned URLs for direct access to uploaded images.
+* AI‑generated captions (single‑sentence) using Google Gemini `generateContent` with inline image data.
+* `/random` command on Telegram and `GET /random` HTTP API returning JSON `{url, caption}`.
+* `/reset` command to clear the used‑photo history (`used.txt`).
+* Persistent `used.txt` tracking to avoid repeats across sessions.
+* Background Flask server on port `8000` with CORS support.
+* Detailed logging for easy debugging.
 
 ---
 
@@ -121,11 +123,11 @@ python main.py
    ```md
    # <% tp.date.now("YYYY-MM-DD") %>
 
-   **Picture of today**  
-   <%*
-     const res = await fetch("http://localhost:8000/random");
-     const j   = await res.json();
-     tR     = `![Daily Photo](${j.url})`;
+   **Picture of the Day**  
+   <%*  
+     const raw = await tp.system.run('curl -s http://localhost:8000/random');
+     const j   = JSON.parse(raw);
+     tR     = `![Daily Photo](${j.url})  \n> ${j.caption}`;
    %>
 
    ## Goals today
