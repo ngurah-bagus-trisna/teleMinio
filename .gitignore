@@ -2,3 +2,4 @@
 venv
 used.txt
 captions.json
+app/__pycache__

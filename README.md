@@ -1,157 +1,143 @@
-# Telegram → MinIO Photo Uploader & AI‑Powered Random Picker Service
+# Telegram → MinIO Photo Uploader & AI-Powered Random Picker Service
 
-This Python service does two things:
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Architecture](https://img.shields.io/badge/arch-serverless-lightgrey)
 
-1. **Telegram Bot**: Receives photos via Telegram, uploads them to a configured MinIO bucket, and replies with a presigned URL.
-2. **HTTP API** (`/random`): Exposes a REST endpoint that returns a random, unused photo URL and AI‑generated caption, marking it as used.
-3. **Reset Command** (`/reset`): Clears the used record so photos can be reused.
+## 🌟 Enhanced Features
 
----
+### Core Functionality
+- **Secure Telegram Bot** 
+  - Single authorized chat ID restriction
+  - 3:2 auto-cropping for uploaded photos
+  - Presigned URL generation
 
-## Features
+- **AI-Powered Service**
+  - Google Gemini `generateContent` integration
+  - Smart caption caching system
+  - Async processing for faster responses
 
-* Secure uploads from a single authorized Telegram chat (cropped to 3:2).
-* Presigned URLs for direct access to uploaded images.
-* AI‑generated captions (single‑sentence) using Google Gemini `generateContent` with inline image data.
-* `/random` command on Telegram and `GET /random` HTTP API returning JSON `{url, caption}`.
-* `/reset` command to clear the used‑photo history (`used.txt`).
-* Persistent `used.txt` tracking to avoid repeats across sessions.
-* Background Flask server on port `8000` with CORS support.
-* Detailed logging for easy debugging.
+### New Improvements
+- **Advanced Image Handling**
+  - Dual-mode processing (original storage + optimized AI compression)
+  - Automatic retry mechanism (3 attempts)
+  - Intelligent size validation (>5MB rejection)
 
----
+- **Enhanced Tracking System**
+  - JSON-based caption storage (`captions.json`)
+  - Atomic write operations
+  - Automatic file creation if missing
 
-## Prerequisites
+- **Performance Optimizations**
+  - Background Flask server (non-blocking)
+  - Connection pooling for MinIO
+  - Exponential backoff for API failures
 
-* Python 3.8+ installed
-* MinIO or any S3‑compatible endpoint accessible
-* Telegram Bot Token from [@BotFather](https://t.me/BotFather)
+## 🛠️ Technical Stack
 
----
+| Component          | Technology               | Version       |
+|--------------------|--------------------------|---------------|
+| Backend Framework  | Python                   | 3.8+          |
+| Telegram Library   | python-telegram-bot      | v20+          |
+| Cloud Storage      | MinIO                    | S3-compatible |
+| AI Service         | Google Gemini API        | v1beta        |
+| Web Server         | Flask                    | 2.0+          |
+| Image Processing   | Pillow                   | 9.0+          |
 
-## Installation
+## 🚀 Installation & Setup
 
-1. **Clone the repo** (or copy `main.py` and related files) into a folder, e.g. `/opt/teleMinio`:
+### Prerequisites
+- Python 3.8+
+- MinIO server (local or cloud)
+- Telegram Bot Token
+- Google Gemini API Key
 
-   ```bash
-   git clone <your-repo-url> /opt/teleMinio
-   cd /opt/teleMinio
-   ```
-
-2. **Create a Python virtual environment**:
-
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-3. **Install dependencies**:
-
-   ```bash
-   pip install python-dotenv python-telegram-bot minio flask flask-cors pillow
-   ```
-
-4. **Create a `.env` file** in the project root with:
-
-   ```ini
-   TELEGRAM_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
-   MINIO_ENDPOINT=your.minio.server:9000
-   MINIO_ACCESS_KEY=your_access_key
-   MINIO_SECRET_KEY=your_secret_key
-   MINIO_BUCKET=photos
-   ALLOWED_CHAT_ID=123456789   # your Telegram user/chat ID
-   ```
-
-5. **Ensure `used.txt` exists** (the service will also create it if missing):
-
-   ```bash
-   touch used.txt
-   ```
-
----
-
-## Running the Service
-
-### Manually
-
+### Quick Start
 ```bash
+# Clone and setup
+git clone <your-repo-url> /opt/teleMinio
+cd /opt/teleMinio
+python3 -m venv venv
 source venv/bin/activate
-python main.py
+pip install -r requirements.txt
+
+# Configuration
+cp .env.example .env
+nano .env  # Edit with your credentials
+
+# Initialize tracking files
+touch used.txt captions.json
 ```
 
-* Bot will start polling for Telegram messages.
-* Flask HTTP server will be available at `http://0.0.0.0:8000/random`.
+## ⚙️ Configuration Guide
 
-### As a systemd Service
+### Environment Variables
+```ini
+# Required
+TELEGRAM_TOKEN=your_bot_token
+MINIO_ENDPOINT=your.minio.server:9000
+MINIO_ACCESS_KEY=your_access_key
+MINIO_SECRET_KEY=your_secret_key
+AI_API_KEY=your_gemini_api_key
+ALLOWED_CHAT_ID=123456789
 
-1. Copy `telegram-minio-uploader.service` to `/etc/systemd/system/`:
+# Optional
+MINIO_BUCKET=photos          # Default
+FLASK_PORT=8000              # Default
+MAX_IMAGE_SIZE=5242880       # 5MB in bytes
+```
 
-   ```ini
-   [Unit]
-   Description=Telegram MinIO Uploader Service
-   After=network.target
+### File Structure
+```
+teleMinio/
+├── app/
+│   ├── config.py        # Configuration loader
+│   ├── storage.py       # MinIO operations (enhanced)
+│   ├── ai_service.py    # Gemini integration (with retry)
+│   ├── utils.py         # File management (atomic writes)
+│   └── handlers.py      # Telegram handlers (async)
+├── main.py              # Entry point
+├── requirements.txt     # Dependencies
+├── used.txt            # Track used photos
+└── captions.json       # AI-generated captions cache
+```
 
-   [Service]
-   Type=simple
-   User=your_user
-   WorkingDirectory=/opt/teleMinio
-   EnvironmentFile=/opt/teleMinio/.env
-   ExecStart=/opt/teleMinio/venv/bin/python /opt/teleMinio/main.py
-   Restart=on-failure
-   RestartSec=10s
+## 💻 Usage Examples
 
-   [Install]
-   WantedBy=multi-user.target
-   ```
-2. Reload, enable, and start:
+### Telegram Commands
+| Command   | Description                          | Response Example                     |
+|-----------|--------------------------------------|--------------------------------------|
+| `/start`  | Show welcome message                 | "Send photos or use /random"        |
+| `/random` | Get random photo                    | JSON with URL and AI caption        |
+| `/reset`  | Clear usage history                 | "Reset complete"                    |
+| (Photo)   | Upload image                       | "Uploaded! URL: ... Caption: ..."   |
 
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable telegram-minio-uploader
-   sudo systemctl start telegram-minio-uploader
-   sudo journalctl -u telegram-minio-uploader -f
-   ```
-
----
-
-## Obsidian Templater Integration
-
-1. **User Script**: Save `randomS3.js` (or `randomMinio.js`) under your vault’s user scripts folder (e.g., `templates/templater-scripts/`).
-2. **Templater Settings**: Point **Script files folder location** to that folder and click **Reload scripts**.
-3. **Daily Note Template**: Example `daily-note.md`:
-
-   ```md
-   # <% tp.date.now("YYYY-MM-DD") %>
-
-   **Picture of the Day**  
-   <%*  
-     const raw = await tp.system.run('curl -s http://localhost:8000/random');
-     const j   = JSON.parse(raw);
-     tR     = `![Daily Photo](${j.url})  \n> ${j.caption}`;
-   %>
-
-   ## Goals today
-   - [ ] …
-   ```
-4. **Create a new Daily Note**: Your note will include a random, unused photo URL served by your local service.
-
----
-
-## API Reference
-
-### `GET /random`
-
-Returns a JSON object with a random unused photo URL:
-
+### API Endpoints
+**GET /random**
+```bash
+curl -s http://localhost:8000/random | jq
+```
 ```json
-{ "url": "https://your.minio.server:9000/photos/<object-key>?<signed-params>" }
+{
+  "url": "https://minio.example.com/photos/uuid.jpg?signature",
+  "caption": "A beautiful sunset over mountains"
+}
 ```
 
-* **404** if no photos or all used.
-* **500** on server error.
+## 🐛 Troubleshooting Guide
 
----
+| Symptom                      | Solution                          | Verification Command              |
+|------------------------------|-----------------------------------|-----------------------------------|
+| Upload failures              | Check MinIO connection           | `curl -v $MINIO_ENDPOINT`        |
+| Caption generation errors    | Verify Gemini API key             | `curl -H "Content-Type: application/json" -d @test.json "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=$AI_API_KEY"` |
+| High memory usage            | Monitor image sizes               | `ls -lh /tmp/teleminio_uploads/`  |
+| Telegram auth failures       | Confirm ALLOWED_CHAT_ID           | Check chat ID via @userinfobot    |
 
-## License
+## 📜 License & Attribution
 
-This project is provided under the MIT License. Feel free to modify and use it in your own setup.
+MIT License - See [LICENSE](LICENSE) for full text.
+
+**Third-party services:**
+- [Google Gemini API](https://ai.google.dev/)
+- [MinIO](https://min.io/)
+- [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot)
