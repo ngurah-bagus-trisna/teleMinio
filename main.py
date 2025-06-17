@@ -5,6 +5,9 @@ import logging
 import threading
 import random
 from dotenv import load_dotenv
+from PIL import Image
+from flask import Flask, jsonify
+from flask_cors import CORS
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -14,7 +17,6 @@ from telegram.ext import (
     filters
 )
 from minio import Minio
-from flask import Flask, jsonify
 
 # Setup logging
 logging.basicConfig(
@@ -23,123 +25,125 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
-TELEGRAM_TOKEN    = os.getenv('TELEGRAM_TOKEN')
-MINIO_ENDPOINT    = os.getenv('MINIO_ENDPOINT')  # e.g., 'play.min.io'
-MINIO_ACCESS_KEY  = os.getenv('MINIO_ACCESS_KEY')
-MINIO_SECRET_KEY  = os.getenv('MINIO_SECRET_KEY')
-MINIO_BUCKET      = os.getenv('MINIO_BUCKET', 'photos')
-ALLOWED_CHAT_ID   = int(os.getenv('ALLOWED_CHAT_ID'))  # Only respond to this chat ID
+TELEGRAM_TOKEN   = os.getenv('TELEGRAM_TOKEN')
+MINIO_ENDPOINT   = os.getenv('MINIO_ENDPOINT')
+MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY')
+MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY')
+MINIO_BUCKET     = os.getenv('MINIO_BUCKET', 'photos')
+ALLOWED_CHAT_ID  = int(os.getenv('ALLOWED_CHAT_ID', '0'))
 
 # Initialize MinIO client
 minio_client = Minio(
     MINIO_ENDPOINT,
     access_key=MINIO_ACCESS_KEY,
     secret_key=MINIO_SECRET_KEY,
-    secure=True  # Set to False if not using TLS
+    secure=True
 )
-
 # Ensure bucket exists
 if not minio_client.bucket_exists(MINIO_BUCKET):
     minio_client.make_bucket(MINIO_BUCKET)
-    logger.info("Created bucket: %s", MINIO_BUCKET)
+    logger.info(f"Created bucket {MINIO_BUCKET}")
 
-# Setup Flask for /random endpoint
+# Setup Flask app for /random endpoint
 flask_app = Flask(__name__)
+CORS(flask_app)
 USED_FILE = os.path.join(os.getcwd(), 'used.txt')
-# Ensure used.txt exists
-def ensure_used_file():
-    if not os.path.exists(USED_FILE):
-        with open(USED_FILE, 'w'): pass
-ensure_used_file()
+if not os.path.exists(USED_FILE):
+    open(USED_FILE, 'w').close()
 
 @flask_app.route('/random', methods=['GET'])
 def random_photo():
     try:
-        # List all objects
         names = [obj.object_name for obj in minio_client.list_objects(MINIO_BUCKET, "", True)]
         if not names:
             return jsonify(error="No objects found"), 404
-        # Read used set
         with open(USED_FILE, 'r') as f:
             used = set(line.strip() for line in f if line.strip())
-        # Filter unused
         unused = [n for n in names if n not in used]
         if not unused:
             return jsonify(error="All photos used"), 404
-        # Pick random
         pick = random.choice(unused)
-        # Mark used
         with open(USED_FILE, 'a') as f:
             f.write(pick + '\n')
-        # Generate presigned URL
         url = minio_client.presigned_get_object(MINIO_BUCKET, pick)
         return jsonify(url=url)
     except Exception as e:
-        logger.error("Random photo error: %s", e)
+        logger.error(f"Random photo error: {e}")
         return jsonify(error=str(e)), 500
 
-# Run Flask in background thread
-def run_http():
-    flask_app.run(host='0.0.0.0', port=8000)
-threading.Thread(target=run_http, daemon=True).start()
-logger.info("HTTP server started on port 8000")
+# Run Flask server in background
+threading.Thread(target=lambda: flask_app.run(host='0.0.0.0', port=8000), daemon=True).start()
+logger.info("Flask HTTP server started on port 8000")
 
+# Telegram bot handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a welcome message when /start is issued."""
     chat_id = update.effective_chat.id
-    logger.info("Received /start from chat_id=%s", chat_id)
+    logger.info(f"Received /start from chat_id={chat_id}")
     if chat_id != ALLOWED_CHAT_ID:
-        logger.warning("Unauthorized /start from chat_id=%s", chat_id)
+        logger.warning(f"Unauthorized /start from chat_id={chat_id}")
         return
-    await update.message.reply_text(
-        "Send me a photo, and I'll upload it to MinIO storage!"
-    )
+    await update.message.reply_text("Send me a photo, and I'll upload it to MinIO storage!")
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle incoming photos: upload them to MinIO and reply with the URL."""
     chat_id = update.effective_chat.id
-    logger.info("Received photo from chat_id=%s", chat_id)
+    logger.info(f"Received photo from chat_id={chat_id}")
     if chat_id != ALLOWED_CHAT_ID:
-        logger.warning("Unauthorized photo message from chat_id=%s", chat_id)
+        logger.warning(f"Unauthorized photo from chat_id={chat_id}")
         return
 
     photo = update.message.photo[-1]
     file = await photo.get_file()
-    file_bytes = await file.download_as_bytearray()
-    logger.info("Downloaded photo, bytes=%d", len(file_bytes))
+    data = await file.download_as_bytearray()
+    logger.info(f"Downloaded photo, bytes={len(data)}")
 
-    file_stream = io.BytesIO(file_bytes)
+    # Crop to 21:9 landscape
+    img = Image.open(io.BytesIO(data))
+    w, h = img.size
+    target_ratio = 21/9  # 21:9 cinematic
+    if w / h > target_ratio:
+        new_w = int(h * target_ratio)
+        left = (w - new_w) // 2
+        box = (left, 0, left + new_w, h)
+    else:
+        new_h = int(w / target_ratio)
+        top = (h - new_h) // 2
+        box = (0, top, w, top + new_h)
+    cropped_img = img.crop(box)
+
+    # Encode to JPEG bytes
+    out = io.BytesIO()
+    cropped_img.save(out, format='JPEG', quality=90)
+    out.seek(0)
+    length = out.getbuffer().nbytes
+
     filename = f"{uuid.uuid4()}.jpg"
-    logger.info("Uploading to MinIO as %s/%s", MINIO_BUCKET, filename)
-
+    logger.info(f"Uploading cropped to MinIO as {filename}")
     try:
         minio_client.put_object(
             MINIO_BUCKET,
             filename,
-            data=file_stream,
-            length=len(file_bytes),
+            data=out,
+            length=length,
             content_type='image/jpeg'
         )
         url = minio_client.presigned_get_object(MINIO_BUCKET, filename)
-        logger.info("Upload successful, URL=%s", url)
-        await update.message.reply_text(f"Uploaded! URL: {url}")
+        logger.info(f"Upload successful, URL={url}")
+        await update.message.reply_text(f"Uploaded cropped! URL: {url}")
     except Exception as e:
-        logger.error("Upload failed: %s", e)
+        logger.error(f"Upload failed: {e}")
         await update.message.reply_text(f"Upload failed: {e}")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log errors caused by Updates."""
     if hasattr(update, 'effective_chat'):
-        logger.error("Error in chat_id=%s: %s", update.effective_chat.id, context.error)
+        logger.error(f"Error in chat_id={update.effective_chat.id}: {context.error}")
     else:
-        logger.error("Error: %s", context.error)
+        logger.error(f"Error: {context.error}")
 
-
+# Main entrypoint
 def main() -> None:
-    """Start the bot."""
-    logger.info("Starting bot and HTTP server")
+    logger.info("Starting Telegram bot and Flask server")
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler('start', start))
     app.add_handler(MessageHandler(filters.PHOTO, photo_handler))

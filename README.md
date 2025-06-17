@@ -46,7 +46,7 @@ You can integrate the `/random` endpoint with Obsidian Templater to embed a new 
 3. **Install dependencies**:
 
    ```bash
-   pip install python-dotenv python-telegram-bot minio flask
+   pip install python-dotenv python-telegram-bot minio flask flask-cors pillow
    ```
 
 4. **Create a `.env` file** in the project root with:
