@@ -98,10 +98,10 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     data = await file.download_as_bytearray()
     logger.info(f"Downloaded photo, bytes={len(data)}")
 
-    # Crop to 21:9 landscape
+    # Crop to 3:2 landscape
     img = Image.open(io.BytesIO(data))
     w, h = img.size
-    target_ratio = 21/9  # 21:9 cinematic
+    target_ratio = 3/2  # 3:2 ratio
     if w / h > target_ratio:
         new_w = int(h * target_ratio)
         left = (w - new_w) // 2
