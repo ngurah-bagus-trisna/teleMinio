@@ -46,7 +46,7 @@ class AIService:
                     "contents": [{
                         "parts": [
                             {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
-                            {"text": "Caption this concisely"}
+                            {"text": "Generate a single, unique Instagram-style caption in English (9–15 words) that matches the subject, mood, and context of the image. The tone should feel natural, minimal, and emotionally resonant—like something real someone would post casually. Ensure this caption is not similar in wording or structure to any previously generated captions. Do not include hashtags, emojis, or any extra explanation. Return only the caption."}
                         ]
                     }]
                 }
