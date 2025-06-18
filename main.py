@@ -5,6 +5,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from app.config import Config
 from app.handlers import handle_photo_upload, handle_random_request
 import threading
+import random
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
