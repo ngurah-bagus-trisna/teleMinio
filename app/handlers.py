@@ -8,6 +8,7 @@ import logging
 from PIL import Image
 from io import BytesIO
 import random
+import requests  # Added for API calls
 
 logger = logging.getLogger(__name__)
 
@@ -69,23 +70,28 @@ async def handle_random_request(update: Update, context: ContextTypes.DEFAULT_TY
         return
     
     try:
-        all_images = storage.list_images()
-        unused_images = FileManager.get_unused_images(all_images)
+        # Call protected endpoint with API key
+        response = requests.get(
+            f'http://localhost:8000/random',
+            params={'key': Config.API_KEY}
+        )
         
-        if not unused_images:
-            await update.message.reply_text("No unused photos available.")
+        if response.status_code != 200:
+            error_msg = response.json().get('error', 'Unknown error')
+            await update.message.reply_text(f"❌ API Error: {error_msg}")
             return
-        
-        selected = random.choice(unused_images)
-        FileManager.mark_as_used(selected)
-        
-        image_url = storage.get_image_url(selected)
-        caption = FileManager.load_captions().get(selected, "No caption available")
-        
+            
+        data = response.json()
         await update.message.reply_text(
-            f"🎲 Random Photo\n📷 URL: {image_url}\n📝 Caption: {caption}"
+            f"🎲 Random Photo\n📷 URL: {data['url']}\n📝 Caption: {data['caption']}"
         )
     
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Request failed: {e}")
+        await update.message.reply_text("❌ Connection to service failed")
+    except KeyError:
+        logger.error("Invalid response format")
+        await update.message.reply_text("❌ Invalid service response")
     except Exception as e:
         logger.error(f"Random command failed: {e}")
         await update.message.reply_text("❌ Failed to get random photo")

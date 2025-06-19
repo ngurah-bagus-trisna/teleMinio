@@ -1,5 +1,6 @@
+import os
 import logging
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from app.config import Config
@@ -13,6 +14,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Add this to your Config class in app/config.py
+# API_KEY = os.getenv('API_KEY', 'default-secret-key')
+
 # Flask setup
 flask_app = Flask(__name__)
 CORS(flask_app)
@@ -21,6 +25,14 @@ CORS(flask_app)
 def random_photo_endpoint():
     from app.storage import MinIOStorage
     from app.utils import FileManager
+    
+    # Get API key from query parameter
+    api_key = request.args.get('key')
+    
+    # Verify API key
+    if not api_key or api_key != Config.API_KEY:
+        logger.warning(f"Unauthorized access attempt with key: {api_key}")
+        return jsonify(error="Unauthorized: Invalid API key"), 401
     
     try:
         storage = MinIOStorage()

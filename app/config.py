@@ -14,3 +14,4 @@ class Config:
     
     USED_FILE = 'used.txt'
     CAPTIONS_FILE = 'captions.json'
+    API_KEY = os.getenv('API_KEY', 'default-secret-key')
