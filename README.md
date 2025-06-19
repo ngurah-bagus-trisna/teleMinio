@@ -80,11 +80,7 @@ MINIO_ACCESS_KEY=your_access_key
 MINIO_SECRET_KEY=your_secret_key
 AI_API_KEY=your_gemini_api_key
 ALLOWED_CHAT_ID=123456789
-
-# Optional
-MINIO_BUCKET=photos          # Default
-FLASK_PORT=8000              # Default
-MAX_IMAGE_SIZE=5242880       # 5MB in bytes
+API_KEY=randomApikey
 ```
 
 ### File Structure
