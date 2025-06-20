@@ -46,7 +46,7 @@ class AIService:
                     "contents": [{
                         "parts": [
                             {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
-                            {"text": "Generate a single caption in English (5–9 words) that matches the mood, context, and aesthetic of the image. The caption should feel authentic, minimal and, artsy Instagram post. Do not add hashtags, emojis, or explanations. Only return the caption."}
+                            {"text": "First, analyze the image thoroughly. Identify not just the visible objects or people, but interpret the atmosphere, emotion, and possible story behind the scene. Reflect on what’s implied, not just what’s shown — consider solitude, tension, routine, longing, or untold narratives within the frame. Then, based on that deep interpretation, generate a single mysterious and poetic caption in English (9–15 words). The caption should evoke curiosity, solitude, or a hidden story — as if something unspoken lingers just beyond the photo. Do not describe the objects directly in the caption. Avoid generic or literal lines. Do not include hashtags, emojis, or any extra explanation — only return the caption."}
                         ]
                     }]
                 }

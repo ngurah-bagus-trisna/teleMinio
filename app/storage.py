@@ -36,10 +36,8 @@ class MinIOStorage:
         return filename
     
     def get_image_url(self, filename: str) -> str:
-        return self.client.presigned_get_object(
-            Config.MINIO_BUCKET,
-            filename
-        )
+        return f"https://{Config.MINIO_ENDPOINT}/{Config.MINIO_BUCKET}/{filename}"
+
     
     def list_images(self):
         return [
